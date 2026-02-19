@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Categoria {
+  id          Int        @id @default(autoincrement())
+  nombre      String     @unique
+  descripcion String
+  imagen      String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  productos   Producto[]
+}
+
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  correo    String   @unique
+  password  String
+  token     String?
+  role      Role     @default(Cliente)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Venta     Venta[]
+}
+
+model Producto {
+  id             Int            @id @default(autoincrement())
+  nombreProducto String
+  descripcion    String
+  stock          Int
+  precioCosto    Float
+  precioPublico  Float
+  favorito       Boolean        @default(false)
+  imagen         String
+  categoriaId    Int
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
+  DetalleVenta   DetalleVenta[]
+  Licencia       Licencia[]
+  categoria      Categoria      @relation(fields: [categoriaId], references: [id])
+
+  @@index([categoriaId], map: "Producto_categoriaId_fkey")
+}
+
+model Cliente {
+  id             Int      @id @default(autoincrement())
+  nombreCompleto String
+  dpi            String?  @unique(map: "dpi") @db.VarChar(20)
+  telefono       String?  @db.VarChar(20)
+  correo         String?  @unique(map: "correo")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+  direccion      String?  @db.VarChar(200)
+  Venta          Venta[]
+}
+
+model DetalleVenta {
+  id             Int       @id @default(autoincrement())
+  ventaId        Int
+  productoId     Int?
+  licenciaId     Int?
+  cantidad       Int       @default(1)
+  precioUnitario Float
+  subtotal       Float
+  Licencia       Licencia? @relation(fields: [licenciaId], references: [id])
+  Producto       Producto? @relation(fields: [productoId], references: [id])
+  Venta          Venta     @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@index([licenciaId], map: "DetalleVenta_licenciaId_fkey")
+  @@index([productoId], map: "DetalleVenta_productoId_fkey")
+  @@index([ventaId], map: "DetalleVenta_ventaId_fkey")
+}
+
+model Licencia {
+  id           Int             @id @default(autoincrement())
+  productoId   Int
+  clave        String
+  estado       Licencia_estado @default(Disponible)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @default(now())
+  DetalleVenta DetalleVenta[]
+  Producto     Producto        @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@index([productoId], map: "Licencia_productoId_fkey")
+}
+
+model MetodoPago {
+  id          Int      @id @default(autoincrement())
+  nombre      String   @unique(map: "nombre") @db.VarChar(50)
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  Venta       Venta[]
+}
+
+model Venta {
+  id               Int            @id @default(autoincrement())
+  usuarioId        Int
+  clienteId        Int?
+  clienteNombre    String?        @db.VarChar(100)
+  clienteTelefono  String?        @db.VarChar(20)
+  clienteCorreo    String?        @db.VarChar(100)
+  clienteDireccion String?        @db.VarChar(150)
+  fecha            DateTime       @default(now())
+  total            Float          @default(0)
+  metodoPagoId     Int
+  comprobantePago  String?        @db.VarChar(255)
+  estado           Venta_estado?  @default(En_Proceso)
+  cuponId          Int?
+  DetalleVenta     DetalleVenta[]
+  Cliente          Cliente?       @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  MetodoPago       MetodoPago     @relation(fields: [metodoPagoId], references: [id])
+  Usuario          Usuario        @relation(fields: [usuarioId], references: [id])
+  cupon            Cupon?         @relation(fields: [cuponId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_venta_cupon")
+
+  @@index([clienteId], map: "Venta_clienteId_fkey")
+  @@index([metodoPagoId], map: "Venta_metodoPagoId_fkey")
+  @@index([usuarioId], map: "Venta_usuarioId_fkey")
+  @@index([cuponId], map: "fk_venta_cupon")
+}
+
+model Cupon {
+  id          Int        @id @default(autoincrement())
+  codigo      String     @unique(map: "codigo") @db.VarChar(100)
+  tipo        Cupon_tipo
+  valor       Decimal    @db.Decimal(10, 2)
+  maxUsos     Int?
+  usos        Int        @default(0)
+  fechaExpira DateTime?  @db.DateTime(0)
+  createdAt   DateTime   @default(now()) @db.DateTime(0)
+  ventas      Venta[]
+}
+
+enum Role {
+  Administrador
+  Cliente
+}
+
+enum Licencia_estado {
+  Disponible
+  Vendido
+  Inactivo
+}
+
+enum Cupon_tipo {
+  porcentaje
+  fijo
+}
+
+enum Venta_estado {
+  Rechazada
+  En_Proceso @map("En Proceso")
+  Entregada
+}
