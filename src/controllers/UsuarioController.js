@@ -4,7 +4,6 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET;
 
 export class UsuarioController {
 
@@ -61,9 +60,14 @@ export class UsuarioController {
         return res.status(401).json({ error: 'Password incorrecto' });
       }
 
+      const jwtSecret = process.env.JWT_SECRET;
+      if (!jwtSecret) {
+        return res.status(500).json({ error: 'JWT_SECRET no está configurado en el servidor' });
+      }
+
       const token = jwt.sign(
         { id: usuario.id, correo: usuario.correo },
-        JWT_SECRET,
+        jwtSecret,
         { expiresIn: '1h' }
       );
 

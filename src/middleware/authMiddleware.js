@@ -1,8 +1,6 @@
 // middlewares/auth.js
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET;
-
 const auth = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
@@ -17,7 +15,12 @@ const auth = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({ error: "JWT_SECRET no está configurado en el servidor" });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
     req.user = decoded;
     next();
   } catch (err) {

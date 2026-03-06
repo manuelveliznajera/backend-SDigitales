@@ -1,9 +1,9 @@
+import 'dotenv/config';
 // app.js
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
-import dotenv from 'dotenv';
 
 import UsurioRoute from './route/UsuarioRoute.js';
 import ProductRouter from './route/ProductoRoute.js';
@@ -12,8 +12,6 @@ import LicenciaRouter from './route/LicenciaRoute.js';
 import recurrenteRoutes from './route/RecurrenteRoute.js';
 import CuponRouter from './route/CuponRoute.js';
 import VentaRouter from './route/VentaRoute.js'; // Asegúrate de importar VentaRoute
-
-dotenv.config(); // Cargar variables de entorno
 
 const app = express();
 
