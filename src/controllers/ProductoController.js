@@ -1,25 +1,22 @@
 // controllers/ProductoController.js
 import { PrismaClient } from '@prisma/client';
-import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { uploadImage, deleteImage } from '../helpers/uploadImage.js';
 
 const prisma = new PrismaClient();
 
 export class ProductoController {
   // Agregar un nuevo producto
   static async agregarProducto(req, res) {
+    console.log('Archivo recibido:', req.file);
     try {
-      let imagen = null;
-      if (req.file) {
-        imagen = req.file.filename;
-        const imagenPath = path.join(process.cwd(), 'uploads', imagen);
-        if (!fs.existsSync(imagenPath)) {
-          return res.status(400).json({ error: 'Error al subir la imagen. El archivo no existe en uploads.' });
-        }
-      } else if (req.body.imagen) {
-        imagen = req.body.imagen;
+      if (!req.file) {
+        return res.status(400).json({ error: 'La imagen es obligatoria' });
       }
+
+      const uploadResult = await uploadImage(req.file.path, 'productos');
+      const imagen = uploadResult.public_id;
 
       const { nombreProducto, descripcion, stock, precioCosto, precioPublico, categoriaId, favorito } = req.body;
 
@@ -29,8 +26,7 @@ export class ProductoController {
         stock === undefined || stock === null ||
         precioCosto === undefined || precioCosto === null ||
         precioPublico === undefined || precioPublico === null ||
-        !categoriaId ||
-        !imagen
+        !categoriaId
       ) {
         return res.status(400).json({ error: 'No se permiten campos nulos o vacíos para crear el producto' });
       }
@@ -107,15 +103,11 @@ export class ProductoController {
       if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
 
       if (req.file) {
-        const nuevaImagen = req.file.filename;
-        if (producto.imagen && producto.imagen !== nuevaImagen) {
-          const imagenAnteriorPath = path.join(process.cwd(), 'uploads', producto.imagen);
-          if (fs.existsSync(imagenAnteriorPath)) fs.unlinkSync(imagenAnteriorPath);
+        const uploadResult = await uploadImage(req.file.path, 'productos');
+        if (producto.imagen) {
+          await deleteImage(producto.imagen);
         }
-        imagen = nuevaImagen;
-      } else if (imagen && producto.imagen !== imagen) {
-        const imagenAnteriorPath = path.join(process.cwd(), 'uploads', producto.imagen);
-        if (fs.existsSync(imagenAnteriorPath)) fs.unlinkSync(imagenAnteriorPath);
+        imagen = uploadResult.public_id;
       } else {
         imagen = producto.imagen;
       }
@@ -155,6 +147,13 @@ export class ProductoController {
   static async eliminarProducto(req, res) {
     try {
       const { id } = req.params;
+      const producto = await prisma.producto.findUnique({ where: { id: parseInt(id) } });
+      if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
+
+      if (producto.imagen) {
+        await deleteImage(producto.imagen);
+      }
+
       await prisma.producto.delete({ where: { id: parseInt(id) } });
       res.status(200).json({ mensaje: 'Producto eliminado correctamente' });
     } catch (error) {

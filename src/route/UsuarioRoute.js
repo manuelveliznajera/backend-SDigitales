@@ -7,7 +7,7 @@ const router = express.Router();
 
 // Rutas públicas
 router.post('/login', UsuarioController.login);
-router.post('/', UsuarioController.agregarUsuario); // opcionalmente, se puede proteger con auth + rol admin
+router.post('/', auth, UsuarioController.agregarUsuario); // opcionalmente, se puede proteger con auth + rol admin
 
 // Rutas protegidas
 router.get('/', auth, UsuarioController.obtenerTodosLosUsuarios);

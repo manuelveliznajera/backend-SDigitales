@@ -1,6 +1,6 @@
 // controllers/CategoriaController.js
 import { PrismaClient } from '@prisma/client';
-import path from 'path';
+import { uploadImage, deleteImage } from '../helpers/uploadImage.js';
 import fs from 'fs';
 import crypto from 'crypto';
 
@@ -8,53 +8,36 @@ const prisma = new PrismaClient();
 
 export class CategoriaController {
   // Crear una nueva categoría
-  static async crearCategoria(req, res) {
-    try {
-      const { nombre, descripcion } = req.body;
-      const imagen = req.file ? req.file.filename : null;
+  static async crearCategoria (req, res) {
+  try {
+    const { nombre, descripcion } = req.body;
 
-      if (!imagen) {
-        return res.status(400).json({ error: 'La imagen es obligatoria' });
-      }
-
-      const imagenPath = path.join(process.cwd(), 'uploads', imagen);
-      if (!fs.existsSync(imagenPath)) {
-        return res.status(400).json({ error: 'Error al subir la imagen. El archivo no existe.' });
-      }
-
-      const imagenHash = CategoriaController.calcularHash(imagenPath);
-
-      // Validar duplicados por hash
-      const archivos = fs.readdirSync(path.join(process.cwd(), 'uploads'));
-      for (const archivo of archivos) {
-        const archivoPath = path.join(process.cwd(), 'uploads', archivo);
-        if (archivoPath === imagenPath) continue;
-        const archivoHash = CategoriaController.calcularHash(archivoPath);
-        if (imagenHash === archivoHash) {
-          fs.unlinkSync(imagenPath);
-          return res.status(400).json({ error: 'La imagen ya existe en el servidor' });
-        }
-      }
-
-      if (!nombre || !descripcion) {
-        return res.status(400).json({ error: 'El nombre y la descripción son obligatorios' });
-      }
-
-      const categoriaExistente = await prisma.categoria.findUnique({ where: { nombre } });
-      if (categoriaExistente) {
-        return res.status(400).json({ error: 'El nombre de la categoría ya existe' });
-      }
-
-      const nuevaCategoria = await prisma.categoria.create({
-        data: { nombre, descripcion, imagen },
-      });
-
-      res.status(201).json(nuevaCategoria);
-    } catch (error) {
-      console.error('Error en crearCategoria:', error);
-      res.status(500).json({ error: error.message });
+    if (!nombre) {
+      return res.status(400).json({ error: "Nombre requerido" });
     }
+
+    let imagenPublicId = null;
+
+    // Si viene imagen
+    if (req.file) {
+      const uploadResult = await uploadImage(req.file.path, "categorias");
+      imagenPublicId = uploadResult.public_id;
+    }
+
+    const categoria = await prisma.categoria.create({
+      data: {
+        nombre,
+        descripcion,
+        imagen: imagenPublicId,
+      },
+    });
+
+    res.json(categoria);
+  } catch (error) {
+    console.error("Error en crearCategoria:", error);
+    res.status(500).json({ error: "Error al crear categoría" });
   }
+};
 
   // Calcular hash de archivo
   static calcularHash(filePath) {
@@ -77,35 +60,46 @@ export class CategoriaController {
   // Editar categoría
   static async editarCategoria(req, res) {
     try {
+      
       const { id } = req.params;
       const { nombre, descripcion } = req.body;
-      let nuevaImagen = req.file ? req.file.filename : null;
 
       const categoria = await prisma.categoria.findUnique({ where: { id: parseInt(id) } });
+
+      if (
+            nombre === categoria.nombre &&
+            descripcion === categoria.descripcion &&
+            !req.file
+          ) {
+            return res.json({ mensaje: "No hubo cambios" });
+          }
+
       if (!categoria) return res.status(404).json({ error: 'Categoría no encontrada' });
+            
+      let nuevaImagen = categoria.imagen;
 
-      if (nuevaImagen && categoria.imagen) {
-        const imagenAnteriorPath = path.join(process.cwd(), 'uploads', categoria.imagen);
-        if (fs.existsSync(imagenAnteriorPath)) fs.unlinkSync(imagenAnteriorPath);
-      }
+  if (req.file) {
+          const upload = await uploadImage(req.file.path, "categorias");
 
-      if (!nuevaImagen) nuevaImagen = categoria.imagen;
+      if (categoria.imagen) {
+              await deleteImage(categoria.imagen);
+        }
 
-      if (nombre && nombre !== categoria.nombre) {
-        const categoriaExistente = await prisma.categoria.findUnique({ where: { nombre } });
-        if (categoriaExistente) return res.status(400).json({ error: 'El nombre de la categoría ya existe' });
-      }
+            nuevaImagen = upload.public_id;
+        }
 
       const categoriaActualizada = await prisma.categoria.update({
-        where: { id: parseInt(id) },
-        data: {
-          nombre: nombre || categoria.nombre,
-          descripcion: descripcion || categoria.descripcion,
-          imagen: nuevaImagen,
-        },
-      });
+      where: { id: parseInt(id) },
+      data: {
+        nombre: nombre || categoria.nombre,
+        descripcion: descripcion || categoria.descripcion,
+        imagen: nuevaImagen,
+      },
+    });
 
-      res.status(200).json(categoriaActualizada);
+
+    res.status(200).json(categoriaActualizada);
+
     } catch (error) {
       console.error('Error al editar la categoría:', error);
       res.status(500).json({ error: 'Error al editar la categoría', detalle: error.message });
@@ -120,14 +114,12 @@ export class CategoriaController {
       if (!categoria) return res.status(404).json({ error: 'Categoría no encontrada' });
 
       if (categoria.imagen) {
-        const imagenPath = path.join(process.cwd(), 'uploads', categoria.imagen);
-        if (fs.existsSync(imagenPath)) fs.unlinkSync(imagenPath);
+        await deleteImage(categoria.imagen);
       }
 
       await prisma.categoria.delete({ where: { id: parseInt(id) } });
       res.status(200).json({ mensaje: 'Categoría eliminada correctamente' });
     } catch (error) {
-      console.error('Error al eliminar la categoría:', error);
       res.status(500).json({ error: 'Error al eliminar la categoría', detalle: error.message });
     }
   }

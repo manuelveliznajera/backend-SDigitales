@@ -64,7 +64,6 @@ export const CuponController = {
       const { id } = req.params;
       const { codigo, tipo, valor, maxUsos, fechaExpira } = req.body;
 
-      console.log(id, codigo, tipo, valor, maxUsos, fechaExpira, "datos para actualizar ");
 
       const cuponActualizado = await prisma.cupon.update({
         where: { id: parseInt(id) },

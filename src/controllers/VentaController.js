@@ -4,13 +4,18 @@ import fs from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
+import { uploadImage } from "../helpers/uploadImage.js";
 
 const prisma = new PrismaClient();
 
 // 🔹 Crear venta con detalles y archivo
 export const createVenta = async (req, res) => {
+  if (!req.body) {
+    return res.status(400).json({ error: "Datos de venta requeridos" });
+  }
+
   try {
-    console.log(req.body.cupon, "cupon id en req body");
+  
     const {
       usuarioId,
       clienteId,
@@ -26,7 +31,36 @@ export const createVenta = async (req, res) => {
     } = req.body;
 
     const detalleVentaParsed = JSON.parse(detalleVenta);
+    let usuarioIdFinal = null;
     let cuponid = null;
+
+    if (usuarioId !== undefined && usuarioId !== null && usuarioId !== "") {
+      const usuarioIdParseado = parseInt(usuarioId);
+      if (!Number.isNaN(usuarioIdParseado)) {
+        const usuarioExistente = await prisma.usuario.findUnique({
+          where: { id: usuarioIdParseado },
+          select: { id: true },
+        });
+        if (usuarioExistente) {
+          usuarioIdFinal = usuarioExistente.id;
+        }
+      }
+    }
+
+    if (!usuarioIdFinal) {
+      const primerUsuario = await prisma.usuario.findFirst({
+        orderBy: { id: "asc" },
+        select: { id: true },
+      });
+
+      if (!primerUsuario) {
+        return res
+          .status(400)
+          .json({ error: "No existe ningún usuario registrado para asignar la venta" });
+      }
+
+      usuarioIdFinal = primerUsuario.id;
+    }
 
     if (cupon) {
       try {
@@ -47,12 +81,13 @@ export const createVenta = async (req, res) => {
     // Comprobante
     let comprobantePath = null;
     if (req.file) {
-      comprobantePath = req.file.path;
+      const uploadResult = await uploadImage(req.file.path, "ventas");
+      comprobantePath = uploadResult.public_id;
     }
 
     const venta = await prisma.venta.create({
       data: {
-        usuarioId: parseInt(usuarioId),
+        usuarioId: usuarioIdFinal,
         clienteId,
         clienteNombre,
         clienteTelefono,
